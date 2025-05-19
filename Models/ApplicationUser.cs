@@ -46,11 +46,6 @@ public class ApplicationUser : IdentityUser
   public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
   /// <summary>
-  /// Indicates whether an email send attempt was made during registration
-  /// </summary>
-  public bool EmailSendAttempted { get; set; } = false;
-
-  /// <summary>
   /// Full name of the user (calculated property)
   /// </summary>
   [Display(Name = "Full Name")]

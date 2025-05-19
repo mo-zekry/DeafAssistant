@@ -47,9 +47,6 @@ namespace DeafAssistant.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("EmailSendAttempted")
-                        .HasColumnType("bit");
-
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(50)
