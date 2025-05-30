@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" version="1.1" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="profileGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#6B7280"/>
+            <stop offset="100%" style="stop-color:#4B5563"/>
+        </linearGradient>
+    </defs>
+    <!-- Background Circle -->
+    <circle cx="200" cy="200" r="200" fill="#E5E7EB"/>
+    <!-- Person Silhouette -->
+    <g transform="translate(80, 60)">
+        <!-- Head -->
+        <circle cx="120" cy="100" r="60" fill="url(#profileGradient)"/>
+        <!-- Body -->
+        <path d="M120 170
+                 C 40 170 20 280 20 340
+                 L220 340
+                 C220 280 200 170 120 170Z"
+              fill="url(#profileGradient)"/>
+    </g>
+</svg>

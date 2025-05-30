@@ -1,9 +1,11 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Security.Claims;
 using System.Text;
 using DeafAssistant.Models;
 using DeafAssistant.Models.Account;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -21,6 +23,7 @@ public class AccountController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _webHostEnvironment;
 
     /// <summary>
     /// Constructor for AccountController
@@ -29,17 +32,20 @@ public class AccountController : ControllerBase
     /// <param name="signInManager">ASP.NET Core Identity sign-in manager</param>
     /// <param name="roleManager">ASP.NET Core Identity role manager</param>
     /// <param name="configuration">Application configuration</param>
+    /// <param name="webHostEnvironment">Web host environment for file operations</param>
     public AccountController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         RoleManager<IdentityRole> roleManager,
-        IConfiguration configuration
+        IConfiguration configuration,
+        IWebHostEnvironment webHostEnvironment
     )
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _roleManager = roleManager;
         _configuration = configuration;
+        _webHostEnvironment = webHostEnvironment;
     }
 
     /// <summary>
@@ -222,7 +228,10 @@ public class AccountController : ControllerBase
         {
             // Don't reveal that the user does not exist
             return Ok(
-                new { message = "If your email is registered, you will receive a password reset link" }
+                new
+                {
+                    message = "If your email is registered, you will receive a password reset link",
+                }
             );
         }
 
@@ -245,7 +254,10 @@ public class AccountController : ControllerBase
         }
 
         return Ok(
-            new { message = "If your email is registered, a password reset token will be generated" }
+            new
+            {
+                message = "If your email is registered, a password reset token will be generated",
+            }
         );
     }
 
@@ -272,6 +284,121 @@ public class AccountController : ControllerBase
         }
 
         return Ok(new { message = "Password has been reset successfully" });
+    }
+
+    /// <summary>
+    /// Upload a new profile picture for a user
+    /// </summary>
+    /// <param name="model">Profile picture upload model</param>
+    /// <returns>URL of the uploaded profile picture</returns>
+    [HttpPost("profile-picture")]
+    [Authorize]
+    public async Task<ActionResult<string>> UploadProfilePicture(
+        [FromForm] ProfilePictureModel model
+    )
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found" });
+        }
+
+        if (model.Picture == null)
+        {
+            return BadRequest(new { message = "No file was uploaded." });
+        }
+
+        // Validate file type
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+        var extension = Path.GetExtension(model.Picture.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+        {
+            return BadRequest(
+                new
+                {
+                    message = "Invalid file type. Only jpg, jpeg, png, and gif files are allowed.",
+                }
+            );
+        }
+
+        // Validate file size (max 5MB)
+        if (model.Picture.Length > 5 * 1024 * 1024)
+        {
+            return BadRequest(new { message = "File size exceeds 5MB limit." });
+        }
+
+        try
+        {
+            var fileName = $"{userId}_{DateTime.UtcNow.Ticks}{extension}";
+            var uploadsFolder = Path.Combine(
+                _webHostEnvironment.WebRootPath,
+                "uploads",
+                "profile-pictures"
+            );
+
+            // Create directory if it doesn't exist
+            if (!Directory.Exists(uploadsFolder))
+            {
+                Directory.CreateDirectory(uploadsFolder);
+            }
+
+            // Delete old profile picture if it exists
+            if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+            {
+                var oldFileName = Path.GetFileName(user.ProfilePictureUrl);
+                var oldFilePath = Path.Combine(uploadsFolder, oldFileName);
+                if (System.IO.File.Exists(oldFilePath))
+                {
+                    System.IO.File.Delete(oldFilePath);
+                }
+            }
+
+            var filePath = Path.Combine(uploadsFolder, fileName);
+            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            {
+                await model.Picture.CopyToAsync(fileStream);
+            }
+
+            // Update user's profile picture URL
+            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            var profilePictureUrl = $"{baseUrl}/uploads/profile-pictures/{fileName}";
+            user.ProfilePictureUrl = profilePictureUrl;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
+            }
+
+            return Ok(new { profilePictureUrl });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(
+                500,
+                new { message = "Error uploading profile picture", error = ex.Message }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Update an existing profile picture for a user
+    /// </summary>
+    /// <param name="model">Profile picture update model</param>
+    /// <returns>URL of the updated profile picture</returns>
+    [HttpPut("profile-picture")]
+    [Authorize]
+    public async Task<ActionResult<string>> UpdateProfilePicture(
+        [FromForm] ProfilePictureModel model
+    )
+    {
+        return await UploadProfilePicture(model);
     }
 
     // Helper method to generate JWT tokens
