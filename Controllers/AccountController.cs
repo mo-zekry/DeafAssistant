@@ -2,12 +2,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Security.Claims;
 using System.Text;
+using DeafAssistant.Context;
 using DeafAssistant.Models;
 using DeafAssistant.Models.Account;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace DeafAssistant.Controllers;
@@ -86,6 +88,9 @@ public class AccountController : ControllerBase
                 await _userManager.AddToRoleAsync(user, "User");
                 user.Role = "User";
             }
+
+            // Create a default free subscription for the user
+            await CreateDefaultFreeSubscription(user.Id);
 
             // Generate JWT token for the user
             var jwtToken = await GenerateJwtToken(user);
@@ -438,5 +443,32 @@ public class AccountController : ControllerBase
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
+    /// Creates a default free subscription for a newly registered user
+    /// </summary>
+    /// <param name="userId">The ID of the user</param>
+    private async Task CreateDefaultFreeSubscription(string userId)
+    {
+        using var scope = HttpContext.RequestServices.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<Context.AppDbContext>();
+
+        // Create a free subscription
+        var subscription = new Models.Subscription
+        {
+            UserId = userId,
+            PlanName = "Free Plan",
+            Price = 0,
+            Currency = "USD",
+            BillingFrequency = "Monthly",
+            StartDate = DateTime.UtcNow,
+            IsActive = true,
+            AutoRenew = true,
+            PaymentMethod = "None"
+        };
+
+        context.Subscription.Add(subscription);
+        await context.SaveChangesAsync();
     }
 }
